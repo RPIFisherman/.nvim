@@ -10,12 +10,15 @@ My Neovim setup, packaged like my `.tmux` repo so I can bootstrap a fresh machin
 - installs Treesitter parsers used by the config
 - installs Mason-managed LSPs / formatters / linters referenced by the config
 - installs common system dependencies (`git`, `ripgrep`, `fd`, ImageMagick, Node, etc.)
+- installs recommended extra runtimes in best-effort mode (`java`, `php`, `luarocks`, etc.)
 - falls back to a local official Neovim build if the package-manager version is older than 0.11
+- prints a dependency report at the end so missing tools are obvious
 
 ## Repo layout
 
 - `nvim/` — actual config that gets symlinked to `~/.config/nvim`
 - `install.sh` — bootstrap installer
+- `DEPENDENCIES.md` — dependency matrix and troubleshooting notes
 - `LICENSE` — MIT license
 
 ## Quick install
@@ -29,8 +32,17 @@ curl -fsSL "https://raw.githubusercontent.com/RPIFisherman/.nvim/main/install.sh
 ### From GitHub with a custom clone path
 
 ```bash
-OH_MY_NVIM_CLONE_PATH="$HOME/.local/share/nvim/my-nvim" \
-  curl -fsSL "https://raw.githubusercontent.com/RPIFisherman/.nvim/main/install.sh" | bash
+curl -fsSL "https://raw.githubusercontent.com/RPIFisherman/.nvim/main/install.sh" | \
+  OH_MY_NVIM_CLONE_PATH="$HOME/.local/share/nvim/my-nvim" bash
+```
+
+### Minimal dependency profile
+
+Use this if you want the installer to skip the extra best-effort runtimes like Java / PHP / LuaRocks:
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/RPIFisherman/.nvim/main/install.sh" | \
+  OH_MY_NVIM_INSTALL_PROFILE=minimal bash
 ```
 
 ### Local checkout
@@ -42,21 +54,25 @@ OH_MY_NVIM_CLONE_PATH="$HOME/.local/share/nvim/my-nvim" \
 ## What the installer does
 
 1. Detects your package manager (`apt`, `brew`, `dnf`, or `pacman`)
-2. Installs common Neovim dependencies
-3. Upgrades to a local official Neovim build when the system version is too old for this config
-4. Backs up an existing `~/.config/nvim` if present
-5. Clones this repo into `~/.local/share/nvim/oh-my-nvim` when installing from GitHub, or uses the local checkout when run from the repo
-6. Symlinks `~/.config/nvim` → the managed `nvim/` directory
-7. Bootstraps plugins with `lazy.nvim`
-8. Installs Mason packages referenced by the config
-9. Installs the configured Treesitter parsers
+2. Installs core Neovim dependencies
+3. Installs recommended extra runtimes in best-effort mode unless `OH_MY_NVIM_INSTALL_PROFILE=minimal`
+4. Upgrades to a local official Neovim build when the system version is too old for this config
+5. Backs up an existing `~/.config/nvim` if present
+6. Clones this repo into `~/.local/share/nvim/oh-my-nvim` when installing from GitHub, or uses the local checkout when run from the repo
+7. Symlinks `~/.config/nvim` → the managed `nvim/` directory
+8. Bootstraps plugins with `lazy.nvim`
+9. Installs Mason packages referenced by the config
+10. Installs the configured Treesitter parsers
+11. Prints a dependency report at the end
 
 ## Notes
 
 - The config is self-contained and does not depend on `~/.vimrc`.
+- Full dependency notes live in [`DEPENDENCIES.md`](./DEPENDENCIES.md).
 - On Ubuntu/Debian, the installer installs `nodejs` but intentionally does **not** force-install the distro `npm` package, because NodeSource `nodejs` can conflict with Ubuntu's `npm` package.
 - `peek.nvim` is kept, but its build step is skipped automatically if `deno` is missing.
 - `image.nvim` is still included and uses the current `magick_rock` setup, so the installer also pulls ImageMagick development packages when available.
+- On Debian/Ubuntu, `fd-find` may be installed as `fdfind`; the installer creates a local `fd` symlink when needed.
 - State files like `webui.db` are intentionally not tracked.
 
 ## Dry run

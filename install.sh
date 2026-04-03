@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+INSTALL_PROFILE="${OH_MY_NVIM_INSTALL_PROFILE:-recommended}"
+PM=""
+INSTALLED_LOCAL_NVIM=false
+
 if [ "${EUID:-$(id -u)}" -eq 0 ]; then
-  printf '❌ Do not execute this script as root!
-' >&2
+  printf '❌ Do not execute this script as root!\n' >&2
   exit 1
 fi
 
 if [ -z "${BASH_VERSION:-}" ]; then
-  printf '❌ This installation script requires bash
-' >&2
+  printf '❌ This installation script requires bash\n' >&2
   exit 1
 fi
 
@@ -25,13 +27,11 @@ is_true() {
 }
 
 log() {
-  printf '%s
-' "$*" >&2
+  printf '%s\n' "$*" >&2
 }
 
 warn() {
-  printf '⚠️  %s
-' "$*" >&2
+  printf '⚠️  %s\n' "$*" >&2
 }
 
 run() {
@@ -40,8 +40,7 @@ run() {
     for arg in "$@"; do
       printf ' %q' "$arg" >&2
     done
-    printf '
-' >&2
+    printf '\n' >&2
   else
     "$@"
   fi
@@ -72,6 +71,33 @@ have_cmd() {
   command -v "$1" >/dev/null 2>&1
 }
 
+report_tool() {
+  local label="$1"
+  shift
+
+  local cmd
+  for cmd in "$@"; do
+    if have_cmd "$cmd"; then
+      log "✅ ${label}: $(command -v "$cmd")"
+      return 0
+    fi
+  done
+
+  warn "${label}: missing (${*})"
+  return 1
+}
+
+validate_profile() {
+  case "$INSTALL_PROFILE" in
+    recommended|minimal)
+      ;;
+    *)
+      warn "Unknown OH_MY_NVIM_INSTALL_PROFILE=${INSTALL_PROFILE}; falling back to recommended"
+      INSTALL_PROFILE="recommended"
+      ;;
+  esac
+}
+
 nvim_version() {
   if ! have_cmd nvim; then
     return 1
@@ -80,9 +106,7 @@ nvim_version() {
 }
 
 version_ge() {
-  [ "$(printf '%s
-%s
-' "$1" "$2" | sort -V | head -n1)" = "$2" ]
+  [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n1)" = "$2" ]
 }
 
 install_local_neovim_if_needed() {
@@ -142,6 +166,7 @@ install_local_neovim_if_needed() {
   run mv "$tmpdir/${unpacked}" "$target_root"
   run ln -sfn "$target_root/bin/nvim" "$HOME/.local/bin/nvim"
   export PATH="$HOME/.local/bin:$PATH"
+  INSTALLED_LOCAL_NVIM=true
 
   local updated_version=''
   updated_version="$(nvim_version || true)"
@@ -150,50 +175,145 @@ install_local_neovim_if_needed() {
   fi
 }
 
-install_packages() {
-  local pm=''
-  if have_cmd apt-get; then
-    pm='apt'
-  elif have_cmd brew; then
-    pm='brew'
-  elif have_cmd dnf; then
-    pm='dnf'
-  elif have_cmd pacman; then
-    pm='pacman'
-  fi
-
-  if [ -z "$pm" ]; then
-    warn 'No supported package manager detected; skipping system package install'
+install_best_effort_packages() {
+  if [ "$#" -eq 0 ]; then
     return
   fi
 
-  log "🔧 Detected package manager: $pm"
-
-  case "$pm" in
+  case "$PM" in
     apt)
-      local base=(git curl unzip build-essential ripgrep fd-find xclip wl-clipboard imagemagick libmagickwand-dev python3 python3-pip nodejs neovim)
-      run sudo apt-get update
-      run sudo apt-get install -y "${base[@]}"
-      run_maybe_failing sudo apt-get install -y deno libxml2-utils
+      run_maybe_failing sudo apt-get install -y "$@"
       ;;
     brew)
-      local base=(neovim git curl unzip ripgrep fd imagemagick python node deno)
-      run brew install "${base[@]}"
+      run_maybe_failing brew install "$@"
       ;;
     dnf)
-      local base=(neovim git curl unzip gcc-c++ make ripgrep fd-find xclip wl-clipboard ImageMagick ImageMagick-devel python3 python3-pip nodejs npm)
-      run sudo dnf install -y "${base[@]}"
-      run_maybe_failing sudo dnf install -y deno libxml2
+      run_maybe_failing sudo dnf install -y "$@"
       ;;
     pacman)
-      local base=(neovim git curl unzip base-devel ripgrep fd xclip wl-clipboard imagemagick python python-pip nodejs npm)
-      run sudo pacman -Sy --needed --noconfirm "${base[@]}"
-      run_maybe_failing sudo pacman -Sy --needed --noconfirm deno libxml2
+      run_maybe_failing sudo pacman -Sy --needed --noconfirm "$@"
       ;;
   esac
 }
 
+install_packages() {
+  if have_cmd apt-get; then
+    PM='apt'
+  elif have_cmd brew; then
+    PM='brew'
+  elif have_cmd dnf; then
+    PM='dnf'
+  elif have_cmd pacman; then
+    PM='pacman'
+  fi
+
+  if [ -z "$PM" ]; then
+    warn 'No supported package manager detected; skipping system package install'
+    return
+  fi
+
+  log "🔧 Detected package manager: $PM"
+  log "🔧 Dependency profile: $INSTALL_PROFILE"
+
+  local -a base=()
+  local -a recommended=()
+  local -a optional=()
+
+  case "$PM" in
+    apt)
+      base=(git curl unzip build-essential ripgrep fd-find xclip wl-clipboard imagemagick libmagickwand-dev python3 python3-pip nodejs neovim)
+      recommended=(default-jre-headless php-cli luarocks lua5.1)
+      optional=(deno libxml2-utils)
+      run sudo apt-get update
+      run sudo apt-get install -y "${base[@]}"
+      ;;
+    brew)
+      base=(neovim git curl unzip ripgrep fd imagemagick python node)
+      recommended=(openjdk php luarocks)
+      optional=(deno)
+      run brew install "${base[@]}"
+      ;;
+    dnf)
+      base=(neovim git curl unzip gcc-c++ make ripgrep fd-find xclip wl-clipboard ImageMagick ImageMagick-devel python3 python3-pip nodejs npm)
+      recommended=(java-21-openjdk-headless php-cli luarocks lua)
+      optional=(deno libxml2)
+      run sudo dnf install -y "${base[@]}"
+      ;;
+    pacman)
+      base=(neovim git curl unzip base-devel ripgrep fd xclip wl-clipboard imagemagick python python-pip nodejs npm)
+      recommended=(jre-openjdk-headless php luarocks lua)
+      optional=(deno libxml2)
+      run sudo pacman -Sy --needed --noconfirm "${base[@]}"
+      ;;
+  esac
+
+  if [ "$INSTALL_PROFILE" = 'recommended' ] && [ "${#recommended[@]}" -gt 0 ]; then
+    log '➕ Installing recommended extra runtimes (best effort)'
+    install_best_effort_packages "${recommended[@]}"
+  fi
+
+  if [ "${#optional[@]}" -gt 0 ]; then
+    log '➕ Installing optional extras (best effort)'
+    install_best_effort_packages "${optional[@]}"
+  fi
+}
+
+create_fd_alias_if_needed() {
+  if ! have_cmd fd && have_cmd fdfind; then
+    run mkdir -p "$HOME/.local/bin"
+    if [ ! -e "$HOME/.local/bin/fd" ]; then
+      log "🔗 Creating ${HOME/#"$HOME"/'~'}/.local/bin/fd -> $(command -v fdfind)"
+      run ln -s "$(command -v fdfind)" "$HOME/.local/bin/fd"
+    fi
+    export PATH="$HOME/.local/bin:$PATH"
+  fi
+}
+
+print_dependency_report() {
+  local missing_required=0
+
+  log ''
+  log '📋 Dependency report'
+  log 'Core tools:'
+  report_tool 'bash' bash || missing_required=$((missing_required + 1))
+  report_tool 'git' git || missing_required=$((missing_required + 1))
+  report_tool 'curl' curl || missing_required=$((missing_required + 1))
+  report_tool 'nvim' nvim || missing_required=$((missing_required + 1))
+  report_tool 'node' node || missing_required=$((missing_required + 1))
+  report_tool 'npm (Mason npm packages)' npm || true
+  report_tool 'python3' python3 || missing_required=$((missing_required + 1))
+  report_tool 'ripgrep (rg)' rg || missing_required=$((missing_required + 1))
+  report_tool 'make (native plugin builds)' make || true
+  report_tool 'compiler (cc/gcc/clang)' cc gcc clang || true
+
+  log 'Recommended extras:'
+  report_tool 'fd / fdfind (file finder)' fd fdfind || true
+  report_tool 'ImageMagick (image.nvim)' magick convert || true
+  report_tool 'clipboard (xclip / wl-copy)' xclip wl-copy || true
+  report_tool 'java (google-java-format / ktlint)' java || true
+  report_tool 'php (php-cs-fixer / pint / phpcbf)' php || true
+  report_tool 'luarocks (Lua rock troubleshooting)' luarocks || true
+  report_tool 'deno (peek.nvim build)' deno || true
+  report_tool 'xmllint (XML formatter fallback)' xmllint || true
+  report_tool 'dotnet (csharpier)' dotnet || true
+  report_tool 'swift (swiftformat)' swift || true
+
+  if [ "$missing_required" -gt 0 ]; then
+    warn 'Some core tools are still missing. See DEPENDENCIES.md for details.'
+  else
+    log '✅ Core tool check passed'
+  fi
+
+  if is_true "$INSTALLED_LOCAL_NVIM"; then
+    log 'ℹ️ Local Neovim was installed under ~/.local/opt/nvim and linked into ~/.local/bin/nvim'
+  fi
+
+  log "ℹ️ Installer profile: ${INSTALL_PROFILE} (set OH_MY_NVIM_INSTALL_PROFILE=minimal to skip extra runtimes)"
+}
+
 main() {
+  validate_profile
+
   local now
   now=$(date +'%Y%m%d%H%M%S')
 
@@ -214,14 +334,12 @@ main() {
   install_local_neovim_if_needed "$now"
 
   if ! have_cmd git; then
-    printf '❌ git is required
-' >&2
+    printf '❌ git is required\n' >&2
     exit 1
   fi
 
   if ! have_cmd nvim; then
-    printf '❌ nvim is required (installer could not find it after package install)
-' >&2
+    printf '❌ nvim is required (installer could not find it after package install)\n' >&2
     exit 1
   fi
 
@@ -239,6 +357,8 @@ main() {
   run mkdir -p "$xdg_config_home" "$xdg_data_home/nvim" "$xdg_cache_home/nvim" "$xdg_state_home/nvim"
   run mkdir -p "$HOME/.local/bin"
   export PATH="$HOME/.local/bin:$xdg_data_home/nvim/mason/bin:$PATH"
+
+  create_fd_alias_if_needed
 
   log "🔗 Linking ${config_dir/#"$HOME"/'~'} -> ${config_source/#"$HOME"/'~'}"
   run ln -sfn "$config_source" "$config_dir"
@@ -262,6 +382,8 @@ main() {
 
   log '🚀 Installing Treesitter parsers'
   run_maybe_failing nvim --headless "+TSInstallSync ${ts_parsers[*]}" '+qa'
+
+  print_dependency_report
 
   log ''
   log '🎉 .nvim installation finished'
