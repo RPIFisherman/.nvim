@@ -171,7 +171,7 @@ install_packages() {
 
   case "$pm" in
     apt)
-      local base=(git curl unzip build-essential ripgrep fd-find xclip wl-clipboard imagemagick libmagickwand-dev python3 python3-pip nodejs npm neovim)
+      local base=(git curl unzip build-essential ripgrep fd-find xclip wl-clipboard imagemagick libmagickwand-dev python3 python3-pip nodejs neovim)
       run sudo apt-get update
       run sudo apt-get install -y "${base[@]}"
       run_maybe_failing sudo apt-get install -y deno libxml2-utils

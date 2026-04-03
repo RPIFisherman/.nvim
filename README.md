@@ -54,6 +54,7 @@ OH_MY_NVIM_CLONE_PATH="$HOME/.local/share/nvim/my-nvim" \
 ## Notes
 
 - The config is self-contained and does not depend on `~/.vimrc`.
+- On Ubuntu/Debian, the installer installs `nodejs` but intentionally does **not** force-install the distro `npm` package, because NodeSource `nodejs` can conflict with Ubuntu's `npm` package.
 - `peek.nvim` is kept, but its build step is skipped automatically if `deno` is missing.
 - `image.nvim` is still included and uses the current `magick_rock` setup, so the installer also pulls ImageMagick development packages when available.
 - State files like `webui.db` are intentionally not tracked.
