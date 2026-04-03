@@ -1,0 +1,10 @@
+* text=auto
+
+.gitignore text
+.gitattributes text
+README.md text eol=lf
+install.sh text eol=lf
+nvim/*.lua text eol=lf
+nvim/**/*.lua text eol=lf
+nvim/**/*.vim text eol=lf
+nvim/lazy-lock.json text eol=lf
