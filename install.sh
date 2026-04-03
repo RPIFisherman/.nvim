@@ -208,7 +208,7 @@ main() {
   local config_dir="$xdg_config_home/nvim"
   local clone_path="${OH_MY_NVIM_CLONE_PATH:-$xdg_data_home/nvim/oh-my-nvim}"
   local config_source="$clone_path/nvim"
-  local repo_url="${OH_MY_NVIM_REPOSITORY:-https://github.com/REPLACE_ME/.nvim.git}"
+  local repo_url="${OH_MY_NVIM_REPOSITORY:-https://github.com/RPIFisherman/.nvim.git}"
 
   install_packages
   install_local_neovim_if_needed "$now"
@@ -229,12 +229,6 @@ main() {
     log "📁 Using local checkout at ${script_dir/#"$HOME"/'~'}"
     config_source="$script_dir/nvim"
   else
-    if [[ "$repo_url" == *'REPLACE_ME'* ]]; then
-      printf '❌ Set OH_MY_NVIM_REPOSITORY to your GitHub repo URL or edit install.sh after you push the repo
-' >&2
-      exit 1
-    fi
-
     backup_path "$clone_path" "$now"
     run mkdir -p "$(dirname "$clone_path")"
     log "⬇️  Cloning ${repo_url} -> ${clone_path/#"$HOME"/'~'}"
